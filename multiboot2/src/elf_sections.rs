@@ -1,14 +1,13 @@
 //! Module for [`ElfSectionsTag`].
 
 use crate::{TagHeader, TagType};
-use core::fmt::{Debug, Formatter};
-use core::marker::PhantomData;
-use core::mem;
-use core::str::Utf8Error;
 use core::cmp::Ordering;
+use core::fmt::{Debug, Formatter};
 use core::hash::Hasher;
-use multiboot2_common::{MaybeDynSized, Tag};
+use core::marker::PhantomData;
+use core::str::Utf8Error;
 use elf::section::*;
+use multiboot2_common::{MaybeDynSized, Tag};
 #[cfg(feature = "builder")]
 use {alloc::boxed::Box, multiboot2_common::new_boxed};
 
@@ -47,8 +46,9 @@ impl ElfSectionsTag {
     #[must_use]
     pub const fn sections(&self) -> ElfSectionIter<'_> {
         let string_section_offset = (self.shndx * self.entry_size) as isize;
-        let string_section_ptr =
-            unsafe { ShPointer::from_pointer(self.sections.as_ptr().offset(string_section_offset))  };
+        let string_section_ptr = unsafe {
+            ShPointer::from_pointer(self.sections.as_ptr().offset(string_section_offset))
+        };
         ElfSectionIter {
             current_section: ShPointer::from_pointer(self.sections.as_ptr()),
             remaining_sections: self.number_of_sections,
@@ -80,7 +80,7 @@ impl ElfSectionsTag {
 impl MaybeDynSized for ElfSectionsTag {
     type Header = TagHeader;
 
-    const BASE_SIZE: usize = mem::size_of::<TagHeader>() + 3 * mem::size_of::<u32>();
+    const BASE_SIZE: usize = size_of::<TagHeader>() + 3 * size_of::<u32>();
 
     fn dst_len(header: &TagHeader) -> usize {
         assert!(header.size as usize >= Self::BASE_SIZE);
@@ -130,7 +130,7 @@ impl<'a> Iterator for ElfSectionIter<'a> {
                 _phantom: PhantomData,
             };
 
-            self.current_section = unsafe { self.current_section.offset(self.entry_size,1) };
+            self.current_section = unsafe { self.current_section.offset(self.entry_size, 1) };
             self.remaining_sections -= 1;
 
             if section.section_type() != ElfSectionType::Unused {
@@ -237,7 +237,7 @@ impl ElfSection<'_> {
     pub fn name(&self) -> Result<&str, Utf8Error> {
         use core::ffi::CStr;
 
-        // SAFETY: `string_table` returns valid pointer to she start of the string table.
+        // SAFETY: `string_table` returns valid pointer to the start of the string table.
         // self.get().name_index() is guaranteed by the multiboot2 spec to not be larger than the string table.
         let name_ptr = unsafe { self.string_table().offset(self.get().name_index() as isize) };
 
@@ -314,11 +314,11 @@ impl PartialOrd for SectionHeaderWrapper {
         macro_rules! actual_partial_comparison {
             ($field:ident) => {
                 match self.0.$field.partial_cmp(&other.0.$field) {
-                    Some(Ordering::Equal) => {}, // fall though
+                    Some(Ordering::Equal) => {} // fall though
                     Some(result) => return Some(result),
-                    None => unreachable!() // All fields implement Ord and so cannot return `None`
+                    None => unreachable!(), // All fields implement Ord and so cannot return `None`
                 }
-            }
+            };
         }
 
         actual_partial_comparison!(sh_name);
@@ -401,7 +401,6 @@ impl core::hash::Hash for ShPointer {
 }
 
 impl ShPointer {
-
     const fn from_pointer(ptr: *const u8) -> Self {
         Self {
             elf32: ptr as *const Elf32_Shdr, // The variant we use to construct this doesn't matter.
@@ -422,16 +421,22 @@ impl ShPointer {
         match sh_size {
             ELF32_SHDR_SIZE => {
                 // SAFETY: Upheld by caller.
-                unsafe { Self { elf32: self.elf32.offset(index) } }
+                unsafe {
+                    Self {
+                        elf32: self.elf32.offset(index),
+                    }
+                }
             }
-            ELF64_SHDR_SIZE => {
-                unsafe { Self { elf64: self.elf64.offset(index) } }
-            }
+            ELF64_SHDR_SIZE => unsafe {
+                Self {
+                    elf64: self.elf64.offset(index),
+                }
+            },
             _ => panic!("Unexpected entry size"), // Note: Can't use fmt in const context.
         }
     }
 
-    /// Returns the pointee as a [SectionHeader] which is a bit-width-agnostic version of an elf section heder
+    /// Returns the pointee as a [SectionHeader] which is a bit-width-agnostic version of an elf section header
     ///
     /// # Safety
     ///
@@ -440,8 +445,7 @@ impl ShPointer {
         match sh_size {
             ELF32_SHDR_SIZE => {
                 // SAFETY: Must be upheld by caller.
-                let sh32 = unsafe { self.elf32.read() };
-                // WHY THE FUCK DOESNT THIS IMPLEMENT `Into`.
+                let sh32 = unsafe { self.elf32.read_unaligned() };
                 SectionHeader {
                     sh_name: sh32.sh_name,
                     sh_type: sh32.sh_type,
@@ -457,7 +461,10 @@ impl ShPointer {
             }
             ELF64_SHDR_SIZE => {
                 // SAFETY: See ELF32_SHDR_SIZE branch.
-                let sh64 = unsafe { self.elf64.read() };
+                // Note this uses `read_unaligned()` because MIRI throws an error otherwise.
+                // Multiboot2 should *actually* guarantee that this is properly aligned
+                // elf32 branch uses `read_unaligned` for parity.
+                let sh64 = unsafe { self.elf64.read_unaligned() };
                 SectionHeader {
                     sh_name: sh64.sh_name,
                     sh_type: sh64.sh_type,
@@ -523,7 +530,6 @@ macro_rules! impl_elf {
 
 impl_elf!(SectionHeader);
 
-
 /// An enum abstraction over raw ELF section types.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
@@ -583,7 +589,7 @@ pub enum ElfSectionType {
 
     /// Values in this inclusive range (`[0x7000_0000, 0x7FFF_FFFF)`) are
     /// reserved for program-specific semantics.
-    ProgramSpecific = elf::abi::SHT_LOUSER
+    ProgramSpecific = elf::abi::SHT_LOUSER,
 }
 
 bitflags! {
