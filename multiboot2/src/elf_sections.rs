@@ -223,7 +223,8 @@ impl ElfSection<'_> {
     }
 
     /// Returns the full section header in a type agnostic format.
-    pub fn section_raw(&self) -> SectionHeader {
+    #[must_use]
+    pub const fn section_raw(&self) -> SectionHeader {
         self.inner.0
     }
 
@@ -311,34 +312,32 @@ struct SectionHeaderWrapper(SectionHeader);
 
 impl PartialOrd for SectionHeaderWrapper {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        macro_rules! actual_partial_comparison {
-            ($field:ident) => {
-                match self.0.$field.partial_cmp(&other.0.$field) {
-                    Some(Ordering::Equal) => {} // fall though
-                    Some(result) => return Some(result),
-                    None => unreachable!(), // All fields implement Ord and so cannot return `None`
-                }
-            };
-        }
-
-        actual_partial_comparison!(sh_name);
-        actual_partial_comparison!(sh_type);
-        actual_partial_comparison!(sh_flags);
-        actual_partial_comparison!(sh_addr);
-        actual_partial_comparison!(sh_offset);
-        actual_partial_comparison!(sh_size);
-        actual_partial_comparison!(sh_link);
-        actual_partial_comparison!(sh_info);
-        actual_partial_comparison!(sh_addralign);
-        actual_partial_comparison!(sh_entsize);
-        Some(Ordering::Equal)
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for SectionHeaderWrapper {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Should partial_cmp call this instead?
-        self.partial_cmp(other).unwrap()
+        // Compares one field, returns if not equal
+        macro_rules! partial {
+            ($field:ident) => {
+                match self.0.$field.cmp(&other.0.$field) {
+                    Ordering::Equal => {}
+                    result => return result,
+                }
+            };
+        }
+        partial!(sh_name);
+        partial!(sh_type);
+        partial!(sh_flags);
+        partial!(sh_addr);
+        partial!(sh_offset);
+        partial!(sh_size);
+        partial!(sh_link);
+        partial!(sh_info);
+        partial!(sh_addralign);
+        partial!(sh_entsize);
+        Ordering::Equal
     }
 }
 
@@ -384,7 +383,7 @@ impl Eq for ShPointer {}
 
 impl PartialOrd for ShPointer {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        unsafe { self.elf64.partial_cmp(&other.elf64) }
+        Some(self.cmp(other))
     }
 }
 
