@@ -115,6 +115,46 @@ impl Debug for ElfSectionsTag {
     }
 }
 
+/// Extension trait for [SectionHeader] containing getters for rust-native types
+pub trait ElfSectionExt {
+    /// Get the section type as an `ElfSectionType` enum variant.
+    #[must_use]
+    fn section_type(&self) -> ElfSectionType;
+
+    /// Get the section's flags.
+    #[must_use]
+    fn flags(&self) -> ElfSectionFlags;
+}
+
+impl ElfSectionExt for SectionHeader {
+    fn section_type(&self) -> ElfSectionType {
+        match self.sh_type {
+            0 => ElfSectionType::Unused,
+            1 => ElfSectionType::ProgramSection,
+            2 => ElfSectionType::LinkerSymbolTable,
+            3 => ElfSectionType::StringTable,
+            4 => ElfSectionType::RelaRelocation,
+            5 => ElfSectionType::SymbolHashTable,
+            6 => ElfSectionType::DynamicLinkingTable,
+            7 => ElfSectionType::Note,
+            8 => ElfSectionType::Uninitialized,
+            9 => ElfSectionType::RelRelocation,
+            10 => ElfSectionType::Reserved,
+            11 => ElfSectionType::DynamicLoaderSymbolTable,
+            0x6000_0000..=0x6FFF_FFFF => ElfSectionType::EnvironmentSpecific,
+            0x7000_0000..=0x7FFF_FFFF => ElfSectionType::ProcessorSpecific,
+            e => {
+                log::warn!("Unknown section type {e:x}. Treating as ElfSectionType::Unused");
+                ElfSectionType::Unused
+            }
+        }
+    }
+
+    fn flags(&self) -> ElfSectionFlags {
+        ElfSectionFlags::from_bits_retain(self.sh_flags)
+    }
+}
+
 /// An enum abstraction over raw ELF section types.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
